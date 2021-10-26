@@ -19,11 +19,24 @@ resource "aws_subnet" "public_subnet" {
     }
 }
 
+resource "aws_subnet" "private_subnet" {
+    vpc_id                  = aws_vpc.vpc1.id
+    cidr_block              = "10.0.2.0/24"
+
+    tags = {
+      "Name" = "my-private-subnet"
+    }
+}
+
 resource "aws_internet_gateway" "IGW1" {
     vpc_id          = aws_vpc.vpc1.id
     tags = {
         Name = "IG1"
     }
+}
+
+resource "aws_eip" "elastic_ip" {
+    vpc = true
 }
 
 resource "aws_route_table" "public_route1" {
@@ -38,20 +51,38 @@ resource "aws_route_table" "public_route1" {
     }
 }
 
+resource "aws_route_table" "route_private" {
+    vpc_id              = aws_vpc.vpc1.id
+    route {
+        cidr_block      = "0.0.0.0/0"
+        gateway_id      = aws_nat_gateway.nat1.id
+    }
+    tags = {
+        Name = "Private Route table"
+    }
+}
+
+resource "aws_nat_gateway" "nat1" {
+    allocation_id = aws_eip.elastic_ip.id
+    subnet_id     = aws_subnet.public_subnet.id
+
+    tags = {
+        "Name" = "Nat Gateway"
+    }
+
+    depends_on = [
+        aws_internet_gateway.IGW1
+    ]
+}
+
 resource "aws_route_table_association" "public_route_association" {
     subnet_id       = aws_subnet.public_subnet.id
     route_table_id  = aws_route_table.public_route1.id
 }
 
-resource "aws_network_acl_rule" "default_rule_deny" {
-    network_acl_id  = aws_vpc.vpc1.default_network_acl_id
-    rule_number     = 100
-    egress          = false
-    protocol        = "-1"
-    rule_action     = "deny"
-    cidr_block      = aws_vpc.vpc1.cidr_block
-    from_port       = 0
-    to_port         = 65535
+resource "aws_route_table_association" "private_route_association" {
+    subnet_id       = aws_subnet.private_subnet.id
+    route_table_id  = aws_route_table.route_private.id
 }
 
 resource "aws_network_acl" "allow_access" {
@@ -134,3 +165,4 @@ resource "aws_network_acl" "allow_access" {
         to_port     = "65535"
     }
 }
+
